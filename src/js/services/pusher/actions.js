@@ -29,6 +29,15 @@ export function disconnect(){
 	}
 }
 
+export function restartMopidy(){
+	return {
+		type: 'PUSHER_INSTRUCT',
+		data: {
+			action: 'restart'
+		}
+	}
+}
+
 export function startUpgrade(){
 	return {
 		type: 'START_UPGRADE'

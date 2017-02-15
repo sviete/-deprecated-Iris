@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 class IrisFrontend(pykka.ThreadingActor, CoreListener):
 
     def __init__(self, config, core):
-        global spotmop
         super(IrisFrontend, self).__init__()
         self.config = config
         self.core = core
@@ -301,5 +300,6 @@ class IrisFrontend(pykka.ThreadingActor, CoreListener):
     # This is untested and may require installation of an upstart script to properly restart
     ##
     def restart( self ):
-        os.execl(sys.executable, *([sys.executable]+sys.argv))
+        subprocess.Popen(['/bin/bash', '-c', 'echo RESTARTING SERVER'])
+        subprocess.Popen(['/bin/bash', '-c', 'killall -q mopidy && sleep 10 && mopidy'])
         

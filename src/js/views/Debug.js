@@ -105,6 +105,12 @@ class Debug extends React.Component{
 								</label>
 							</div>
 						</div>
+						<div className="field checkbox">
+							<div className="name">Actions</div>
+							<div className="input">
+								<button className="primary" onClick={e => this.props.pusherActions.restartMopidy()}>Restart mopidy</button>
+							</div>
+						</div>
 					</form>
 
 					<h4 className="underline">Mopidy</h4>
