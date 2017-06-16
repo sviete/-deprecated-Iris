@@ -1,7 +1,7 @@
 
 import React, { PropTypes } from 'react'
 import { connect } from 'react-redux'
-import { hashHistory } from 'react-router'
+import { hashHistory, Link } from 'react-router'
 import { bindActionCreators } from 'redux'
 import FontAwesome from 'react-fontawesome'
 
@@ -9,7 +9,7 @@ import TrackList from '../components/TrackList'
 import Track from '../components/Track'
 import Dater from '../components/Dater'
 import SidebarToggleButton from '../components/SidebarToggleButton'
-import FullPlayer from '../components/FullPlayer'
+import Thumbnail from '../components/Thumbnail'
 import ArtistSentence from '../components/ArtistSentence'
 import Header from '../components/Header'
 
@@ -56,6 +56,34 @@ class Queue extends React.Component{
 		)
 	}
 
+	renderArtwork(){
+		if( 
+			!this.props.current_track || 
+			!this.props.current_track.album || 
+			!this.props.current_track.album.images ){
+				return (
+					<span className={this.props.radio_enabled ? 'artwork radio-enabled' : 'artwork'}>
+						{this.props.radio_enabled ? <img className="radio-overlay" src="assets/radio-overlay.png" /> : null}
+						<Thumbnail size="huge" />
+					</span>
+				)
+		}
+
+		var images = this.props.current_track.album.images
+		if (typeof(this.props.tracks[this.props.current_track.uri]) !== 'undefined'){
+			images = this.props.tracks[this.props.current_track.uri].album.images
+		}
+
+		var link = null
+		if( this.props.current_track.album.uri ) link = '/album/'+this.props.current_track.album.uri
+		return (
+			<Link className={this.props.radio_enabled ? 'artwork radio-enabled' : 'artwork'} to={link} onContextMenu={e => this.handleContextMenu(e,this.props.current_track.album)}>
+				{this.props.radio_enabled ? <img className="radio-overlay" src="assets/radio-overlay.png" /> : null}
+				<Thumbnail size="huge" images={images} canZoom />
+			</Link>
+		)
+	}
+
 	render(){
 		var options = (
 			<span>
@@ -82,7 +110,14 @@ class Queue extends React.Component{
 		return (
 			<div className="view queue-view">			
 				<Header icon="play" title="Now playing" options={options} uiActions={this.props.uiActions} />
-				<FullPlayer />
+
+				<div className="current-track">
+					{this.renderArtwork()}
+					<div className="title">
+						{this.props.current_track ? this.props.current_track.name : <span>-</span>}
+					</div>
+					{this.props.current_track ? <ArtistSentence artists={ this.props.current_track.artists } /> : <ArtistSentence />}
+				</div>
 
 				<section className="list-wrapper">
 					<TrackList
@@ -111,6 +146,9 @@ class Queue extends React.Component{
 const mapStateToProps = (state, ownProps) => {
 	return {
 		radio: state.ui.radio,
+		radio_enabled: (state.ui.radio && state.ui.radio.enabled ? true : false),
+		tracks: state.ui.tracks,
+		current_track: (typeof(state.ui.current_track) !== 'undefined' && typeof(state.ui.tracks) !== 'undefined' && typeof(state.ui.tracks[state.ui.current_track.uri]) !== 'undefined' ? state.ui.tracks[state.ui.current_track.uri] : null),
 		current_tracklist: state.ui.current_tracklist
 	}
 }

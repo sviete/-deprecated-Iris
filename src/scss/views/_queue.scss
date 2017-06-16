@@ -1,43 +1,49 @@
 
 .queue-view {
 
-	.player {
+	.current-track {
 		text-align: center;
 		padding: 40px 20px 10px;
 
-		.artwork,
-		.controls a {
-			border: 0;
+		.title,
+		.artist-sentence {
+			font-size: 18px;
+			text-transform: uppercase;
+			font-weight: bold;
 		}
 
-		.artwork,
-		.controls,
-		.progress {
+		.title {
+			padding-top: 20px;
+		}
+
+		.artist-sentence {
+			opacity: 0.5;
+		}
+
+		.artwork {
+			position: relative;
 			display: block;
 			max-width: 400px;
 			margin: 0 auto;
-		}
+			border: 0 !important;
 
-		.controls {
-			padding: 20px 0 10px;
-			a {
-				font-size: 18px;
+			.thumbnail {
+				max-width: none;
 			}
-		}
 
-		.thumbnail {
-			max-width: none;
-		}
+			&.radio-enabled {
+				.thumbnail {
+					box-sizing: border-box;
+					padding: 10%;
+				}
 
-		.current-track {
-			padding: 20px 0 0 0;
-			font-weight: 700;
-		}
-
-		.slider {
-			margin-top: 0;
-			.track {
-				background: rgba(0,0,0,0.2);
+				.radio-overlay {
+					position: absolute;
+					top: 0;
+					left: 0;
+					width: 100%;
+					z-index: 2;
+				}
 			}
 		}
 	}
