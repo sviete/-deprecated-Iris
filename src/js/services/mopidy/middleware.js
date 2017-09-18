@@ -9,6 +9,7 @@ var uiActions = require('../ui/actions.js')
 var spotifyActions = require('../spotify/actions.js')
 var pusherActions = require('../pusher/actions.js')
 var lastfmActions = require('../lastfm/actions.js')
+var aisActions = require('../ais/actions.js')
 
 const MopidyMiddleware = (function(){ 
 
@@ -245,6 +246,7 @@ const MopidyMiddleware = (function(){
                 store.dispatch({
                   type: 'ENABLE_AIS'
                 })
+                store.dispatch(aisActions.getMenuItems())
               }
 
                 store.dispatch({ type: 'MOPIDY_URISCHEMES_FILTERED', data: uri_schemes });

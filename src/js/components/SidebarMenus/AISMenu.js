@@ -15,8 +15,16 @@ class AISMenu extends Component {
 
   render = () => {
     let menuItems = this.props.menuItems.map((menuItem) => {
+      let iconName = undefined
+      let iconSrc= undefined
+      if(menuItem.icon.startsWith("http://")) {
+        iconSrc = menuItem.icon
+      } else {
+        iconName = menuItem.icon
+      }
+
       return <Link key={menuItem.href} className={this.linkClassName(menuItem.href)} to={global.baseURL+menuItem.href}>
-        <Icon name={menuItem.icon} />
+        <Icon name={iconName} src={iconSrc} />
         {menuItem.name}
       </Link>
     })

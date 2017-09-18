@@ -1,3 +1,5 @@
+import {SET_MENU_ITEMS} from './actions'
+
 let menuItems = [
   {name: "Discover", icon: 'ais', href: "library/browse/ais:root:1"},
   {name: "Playlists", icon: 'playlist', href: "library/playlists"},
@@ -13,6 +15,8 @@ export default function(state={}, action) {
   switch(action.type) {
     case 'ENABLE_AIS':
       return Object.assign({}, state, {connected: true, menuItems: menuItems})
+    case SET_MENU_ITEMS:
+      return Object.assign({}, state, {menuItems: action.menuItems})
     default:
       return state
   }
