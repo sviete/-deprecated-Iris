@@ -232,6 +232,7 @@ class Settings extends React.Component {
 						{this.renderServiceStatus('mopidy')}
 						{this.renderServiceStatus('pusher')}
 						{this.renderServiceStatus('spotify')}
+            {this.renderServiceStatus('ais')}
 					</div>
 
 					<h4 className="underline">System</h4>
