@@ -18,12 +18,48 @@ const CoreMiddleware = (function(){
 
         switch(action.type){
 
+            case 'HANDLE_EXCEPTION':
+                var state = Object.assign({}, store.getState());
+
+                // Strip out non-essential store info
+                delete state.core.albums
+                delete state.core.artists
+                delete state.core.playlists
+                delete state.core.users
+                delete state.core.queue_metadata
+                delete state.core.current_tracklist
+                delete state.spotify.library_albums
+                delete state.spotify.library_artists
+                delete state.spotify.library_playlists
+                delete state.spotify.autocomplete_results
+                delete state.mopidy.library_albums
+                delete state.mopidy.library_artists
+                delete state.mopidy.library_playlists
+
+                var data = Object.assign(
+                    {},
+                    action.data, 
+                    {
+                        state: state
+                    }
+                );
+
+                Raven.captureException(
+                    new Error(action.message), 
+                    {
+                        extra: data
+                    }
+                );
+
+                store.dispatch(uiActions.createNotification(action.message,'bad'));
+                console.error(action.message, data);
+                break;
+
             case 'CORE_START_SERVICES':
                 store.dispatch(mopidyActions.connect())
                 store.dispatch(pusherActions.connect())
                 store.dispatch(lastfmActions.connect())
-                store.dispatch(spotifyActions.connect())
-                
+
                 next(action)
                 break
 
@@ -108,8 +144,8 @@ const CoreMiddleware = (function(){
                 next(action)
 
                 var state = store.getState()
-                if (state.ui.search_settings){
-                    var uri_schemes = state.ui.search_settings.uri_schemes
+                if (state.ui.search_uri_schemes){
+                    var uri_schemes = state.ui.search_uri_schemes
                 } else {
                     var uri_schemes = state.mopidy.uri_schemes
                 }

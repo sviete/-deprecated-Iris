@@ -34,9 +34,10 @@ var initialState = {
 		current_tracklist: [],
 		current_tltrack: false,
 		albums: {},
-		users: {},
+		artists: {},
 		playlists: {},
-		artists: {}
+		users: {},
+		tracks: {}
 	},
 	ui: {
 		slim_mode: false,

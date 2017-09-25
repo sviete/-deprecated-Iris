@@ -1,4 +1,5 @@
 
+var coreActions = require('../../services/core/actions')
 var uiActions = require('../../services/ui/actions')
 var mopidyActions = require('../../services/mopidy/actions')
 var lastfmActions = require('../../services/lastfm/actions')
@@ -54,24 +55,23 @@ const sendRequest = ( dispatch, getState, endpoint, method = 'GET', data = false
                         },
                         (xhr, status, error) => {
                             dispatch(uiActions.stopLoading(loader_key))
-                            
-                            // Get the error message, jsson decode if necessary
-                            var message = xhr.responseText
-                            var status = null
-                            var response = JSON.parse(xhr.responseText)                            
-                            if (response.error && response.error.message){
-                                message = response.error.message
-                                status = response.error.status
-                            }
+                            dispatch(coreActions.handleException(
+                                'Spotify: '+xhr.responseJSON.error.message,
+                                {
+                                    source: 'spotify/actions.js/sendRequest',
+                                    config: config,
+                                    xhr: xhr,
+                                    status: status,
+                                    error: error
+                                }
+                            ))
 
                             // TODO: Instead of allowing request to fail before renewing the token, once refreshed
                             // we should retry the original request(s)
-                            if (message == 'The access token expired'){
+                            if (xhr.responseJSON.error.message == 'The access token expired'){
                                 dispatch(refreshToken(dispatch, getState))
                             }
 
-                            dispatch(uiActions.createNotification(message,'bad'))
-                            console.error( endpoint+' failed', response)
                             reject(error)
                         }
                     )
@@ -100,10 +100,6 @@ function getToken( dispatch, getState ){
             .then(
                 response => {
                     resolve(response.access_token)
-                },
-                error => {
-                    dispatch({ type: 'SPOTIFY_DISCONNECTED' })
-                    reject(error)
                 }
             );
     });
@@ -114,32 +110,41 @@ function refreshToken( dispatch, getState ){
 
         if (getState().spotify.authorization){
 
-            $.ajax({
-                    method: 'GET',
-                    url: getState().spotify.authorization_url+'?action=refresh&refresh_token='+getState().spotify.refresh_token,
-                    dataType: "json",
-                    timeout: 10000
-                })
+            var config = {
+                method: 'GET',
+                url: getState().spotify.authorization_url+'?action=refresh&refresh_token='+getState().spotify.refresh_token,
+                dataType: "json",
+                timeout: 10000
+            };
+
+            $.ajax(config)
                 .then(
                     response => {
                         response.token_expiry = new Date().getTime() + ( response.expires_in * 1000 )
                         response.source = 'spotify'
                         dispatch({
                             type: 'SPOTIFY_TOKEN_REFRESHED',
-                            access_token_provider: 'http_api',
                             data: response
                         })
                         resolve(response)
                     },
-                    error => {
+                    (xhr, status, error) => {
                         dispatch({ type: 'SPOTIFY_DISCONNECTED' })
-                        dispatch(uiActions.createNotification('Could not refresh token','bad'))
-                        console.error('Could not refresh token', error)
+                        dispatch(coreActions.handleException(
+                            'Spotify: '+xhr.responseJSON.error_description,
+                            {
+                                source: 'spotify/actions.js/refreshToken',
+                                config: config,
+                                xhr: xhr,
+                                status: status,
+                                error: error
+                            }
+                        ))
                         reject(error)
                     }
                 );
 
-        }else{
+        } else {
 
             $.ajax({
                     method: 'GET',
@@ -151,8 +156,16 @@ function refreshToken( dispatch, getState ){
                     response => {
                         if (response.type == 'error'){
                             dispatch({ type: 'SPOTIFY_DISCONNECTED' })
-                            dispatch(uiActions.createNotification(response.message,'bad'))
-                            console.error('Could not refresh token', response)
+                            dispatch(coreActions.handleException(
+                                'Spotify: '+response.message,
+                                {
+                                    source: 'spotify/actions.js/refreshToken',
+                                    config: config,
+                                    xhr: xhr,
+                                    status: status,
+                                    error: error
+                                }
+                            ))
                             reject(response)
 
                         } else {
@@ -170,8 +183,16 @@ function refreshToken( dispatch, getState ){
                     },
                     error => {
                         dispatch({ type: 'SPOTIFY_DISCONNECTED' })
-                        dispatch(uiActions.createNotification('Could not refresh token','bad'))
-                        console.error('Could not refresh token', error)
+                        dispatch(coreActions.handleException(
+                            'Spotify: Could not refresh token',
+                            {
+                                source: 'spotify/actions.js/refreshToken',
+                                config: config,
+                                xhr: xhr,
+                                status: status,
+                                error: error
+                            }
+                        ))
                         reject(error)
                     }
                 );
@@ -1236,27 +1257,69 @@ export function getPlaylist(uri){
  *
  * Recursively get .next until we have all tracks
  **/
-function loadNextPlaylistTracksBatch(dispatch, getState, uri, tracks, lastResponse){
-    if( lastResponse.next ){
-        sendRequest(dispatch, getState, lastResponse.next)
-            .then( response => {
-                tracks = [...tracks, ...response.items]
-                loadNextPlaylistTracksBatch(dispatch, getState, uri, tracks, response)
-            });
-    }else{
-        dispatch({
-            type: 'SPOTIFY_ALL_PLAYLIST_TRACKS_LOADED_FOR_PLAYING',
-            uri: uri,
-            tracks: tracks
-        });
+
+export function getPlaylistTracksForPlaying(uri){
+    return (dispatch, getState) => {
+        dispatch(uiActions.startProcess(
+            'SPOTIFY_GET_PLAYLIST_TRACKS_FOR_PLAYING_PROCESSOR',
+            'Loading playlist tracks', 
+            {
+                uri: uri,
+                next: 'users/'+ helpers.getFromUri('userid',uri) +'/playlists/'+ helpers.getFromUri('playlistid',uri) +'/tracks?market='+getState().core.country
+            }
+        ))
     }
 }
 
-export function getAllPlaylistTracks(uri){
+export function getPlaylistTracksForPlayingProcessor(data){
     return (dispatch, getState) => {
-        sendRequest(dispatch, getState, 'users/'+ helpers.getFromUri('userid',uri) +'/playlists/'+ helpers.getFromUri('playlistid',uri) +'/tracks?market='+getState().core.country)
+        sendRequest(dispatch, getState, data.next)
             .then( response => {
-                loadNextPlaylistTracksBatch(dispatch, getState, uri, response.items, response)
+
+                // Check to see if we've been cancelled
+                if (getState().ui.processes['SPOTIFY_GET_PLAYLIST_TRACKS_FOR_PLAYING_PROCESSOR'] !== undefined){
+                    var processor = getState().ui.processes['SPOTIFY_GET_PLAYLIST_TRACKS_FOR_PLAYING_PROCESSOR']
+
+                    if (processor.status == 'cancelling'){
+                        dispatch(uiActions.processCancelled('SPOTIFY_GET_PLAYLIST_TRACKS_FOR_PLAYING_PROCESSOR'))
+                        return false
+                    }
+                }
+
+                // Add on our new batch of loaded tracks
+                var uris = []
+                var new_uris = []
+                for (var i = 0; i < response.items.length; i++){
+                    new_uris.push(response.items[i].track.uri)
+                }
+                if (data.uris){
+                    uris = [...data.uris, ...new_uris];
+                } else {
+                    uris = new_uris;
+                }
+
+                // We got a next link, so we've got more work to be done
+                if (response.next){
+                    dispatch(uiActions.updateProcess(
+                        'SPOTIFY_GET_PLAYLIST_TRACKS_FOR_PLAYING_PROCESSOR', 
+                        'Loading '+(response.total-uris.length)+' playlist tracks', 
+                        {
+                            next: response.next,
+                            total: response.total,
+                            remaining: response.total - uris.length
+                        }
+                    ))
+                    dispatch(uiActions.runProcess(
+                        'SPOTIFY_GET_PLAYLIST_TRACKS_FOR_PLAYING_PROCESSOR', 
+                        {
+                            next: response.next,
+                            uris: uris
+                        }
+                    ))
+                } else {
+                    dispatch(mopidyActions.playURIs(uris, data.uri))
+                    dispatch(uiActions.processFinished('SPOTIFY_GET_PLAYLIST_TRACKS_FOR_PLAYING_PROCESSOR'))
+                }
             });
     }
 }
@@ -1372,10 +1435,19 @@ export function getLibraryPlaylistsProcessor(data){
                     var total = response.total
                     var loaded = getState().spotify.library_playlists.length
                     var remaining = total - loaded
-                    dispatch(uiActions.updateProcess('SPOTIFY_GET_LIBRARY_PLAYLISTS_PROCESSOR', 'Loading '+remaining+' Spotify playlists', {next: response.next}))
+                    dispatch(uiActions.updateProcess(
+                        'SPOTIFY_GET_LIBRARY_PLAYLISTS_PROCESSOR', 
+                        'Loading '+remaining+' Spotify playlists', 
+                        {
+                            next: response.next,
+                            total: response.total,
+                            remaining: remaining
+                        }
+                    ))
                     dispatch(uiActions.runProcess('SPOTIFY_GET_LIBRARY_PLAYLISTS_PROCESSOR', {next: response.next}))
                 } else {
                     dispatch(uiActions.processFinished('SPOTIFY_GET_LIBRARY_PLAYLISTS_PROCESSOR'))
+                    dispatch({type: 'SPOTIFY_LIBRARY_PLAYLISTS_LOADED_ALL'})
                 }
             });
     }
@@ -1425,7 +1497,15 @@ export function getLibraryArtistsProcessor(data){
                     var total = response.artists.total
                     var loaded = getState().spotify.library_artists.length
                     var remaining = total - loaded
-                    dispatch(uiActions.updateProcess('SPOTIFY_GET_LIBRARY_ARTISTS_PROCESSOR', 'Loading '+remaining+' Spotify artists', {next: response.artists.next}))
+                    dispatch(uiActions.updateProcess(
+                        'SPOTIFY_GET_LIBRARY_ARTISTS_PROCESSOR', 
+                        'Loading '+remaining+' Spotify artists', 
+                        {
+                            next: response.artists.next, 
+                            total: response.artists.total,
+                            remaining: remaining
+                        }
+                    ))
                     dispatch(uiActions.runProcess('SPOTIFY_GET_LIBRARY_ARTISTS_PROCESSOR', {next: response.artists.next}))
                 } else {
                     dispatch(uiActions.processFinished('SPOTIFY_GET_LIBRARY_ARTISTS_PROCESSOR'))
@@ -1478,7 +1558,15 @@ export function getLibraryAlbumsProcessor(data){
                     var total = response.total
                     var loaded = getState().spotify.library_albums.length
                     var remaining = total - loaded
-                    dispatch(uiActions.updateProcess('SPOTIFY_GET_LIBRARY_ALBUMS_PROCESSOR', 'Loading '+remaining+' Spotify albums', {next: response.next}))
+                    dispatch(uiActions.updateProcess(
+                        'SPOTIFY_GET_LIBRARY_ALBUMS_PROCESSOR', 
+                        'Loading '+remaining+' Spotify albums', 
+                        {
+                            next: response.next, 
+                            total: response.total,
+                            remaining: remaining
+                        }
+                    ))
                     dispatch(uiActions.runProcess('SPOTIFY_GET_LIBRARY_ALBUMS_PROCESSOR', {next: response.next}))
                 } else {
                     dispatch(uiActions.processFinished('SPOTIFY_GET_LIBRARY_ALBUMS_PROCESSOR'))
